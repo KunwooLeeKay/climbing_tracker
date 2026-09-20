@@ -363,6 +363,107 @@
   function saveData(){
     try { localStorage.setItem(KEY, JSON.stringify(sessions)); }
     catch(e){ toast("Could not save \u2014 storage blocked"); }
+    pushToGitHub();
+  }
+
+  /* ---------------- GitHub sync (GitHub is the source of truth when reachable; ---------------- */
+  /* ---------------- localStorage is the instant-load / offline cache)         ---------------- */
+  var SYNC_KEY = "climbing-tracker-sync-cfg";
+  var SYNC_PATH = "sessions.json";
+
+  function loadSyncCfg(){
+    try { var raw = localStorage.getItem(SYNC_KEY); return raw ? JSON.parse(raw) : {}; }
+    catch(e){ return {}; }
+  }
+  function saveSyncCfg(cfg){
+    try { localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)); } catch(e){}
+  }
+  function b64EncodeUnicode(str){
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+  function b64DecodeUnicode(str){
+    return decodeURIComponent(escape(atob(str.replace(/\n/g,""))));
+  }
+  function setSyncStatus(msg){
+    var el = document.getElementById("sync-status");
+    if(el) el.textContent = msg;
+  }
+  function ghHeaders(cfg){
+    return { "Authorization": "token "+cfg.token, "Accept": "application/vnd.github+json" };
+  }
+  function ghUrl(cfg){
+    return "https://api.github.com/repos/"+cfg.repo+"/contents/"+SYNC_PATH;
+  }
+  function syncConfigured(){
+    var cfg = loadSyncCfg();
+    return !!(cfg.repo && cfg.token);
+  }
+
+  /* Pull the current file from GitHub and adopt it as the live session list.
+     Falls back silently to whatever's already local if offline or not configured. */
+  function pullFromGitHub(opts){
+    opts = opts || {};
+    var cfg = loadSyncCfg();
+    if(!cfg.repo || !cfg.token){ if(opts.onDone) opts.onDone(false); return; }
+    setSyncStatus("Checking GitHub\u2026");
+    fetch(ghUrl(cfg), { headers: ghHeaders(cfg) }).then(function(res){
+      if(res.status===404) return { notFound:true };
+      if(!res.ok) throw new Error("pull failed ("+res.status+")");
+      return res.json();
+    }).then(function(json){
+      if(json.notFound){
+        setSyncStatus("No backup on GitHub yet \u2014 creating one from local data");
+        pushToGitHub();
+        if(opts.onDone) opts.onDone(false);
+        return;
+      }
+      cfg.lastSha = json.sha;
+      cfg.lastSyncedAt = new Date().toISOString();
+      saveSyncCfg(cfg);
+      var remote = JSON.parse(b64DecodeUnicode(json.content));
+      var changed = JSON.stringify(remote) !== JSON.stringify(sessions);
+      sessions = remote;
+      try { localStorage.setItem(KEY, JSON.stringify(sessions)); } catch(e){}
+      setSyncStatus("Synced from GitHub \u2014 "+new Date().toLocaleTimeString());
+      if(opts.onDone) opts.onDone(changed);
+    }).catch(function(err){
+      setSyncStatus("Offline \u2014 using local copy");
+      if(opts.onDone) opts.onDone(false);
+    });
+  }
+
+  /* Push the current local session list up to GitHub. Retries once on a
+     conflicting concurrent edit (409) by re-reading the latest sha. */
+  function pushToGitHub(isRetry){
+    var cfg = loadSyncCfg();
+    if(!cfg.repo || !cfg.token) return;
+    var body = {
+      message: "Update session log \u2014 "+new Date().toISOString(),
+      content: b64EncodeUnicode(JSON.stringify(sessions, null, 2))
+    };
+    if(cfg.lastSha) body.sha = cfg.lastSha;
+    setSyncStatus("Backing up\u2026");
+    fetch(ghUrl(cfg), {
+      method: "PUT",
+      headers: Object.assign({ "Content-Type": "application/json" }, ghHeaders(cfg)),
+      body: JSON.stringify(body)
+    }).then(function(res){
+      if(res.status===409 && !isRetry){
+        return fetch(ghUrl(cfg), { headers: ghHeaders(cfg) }).then(function(r2){ return r2.json(); }).then(function(j2){
+          cfg.lastSha = j2.sha; saveSyncCfg(cfg);
+          return pushToGitHub(true);
+        });
+      }
+      if(!res.ok) return res.json().catch(function(){return{};}).then(function(j){ throw new Error(j.message||("push failed ("+res.status+")")); });
+      return res.json().then(function(j){
+        cfg.lastSha = j.content.sha;
+        cfg.lastSyncedAt = new Date().toISOString();
+        saveSyncCfg(cfg);
+        setSyncStatus("Backed up "+new Date().toLocaleTimeString());
+      });
+    }).catch(function(err){
+      setSyncStatus("Backup failed \u2014 "+err.message+" (will retry on next save)");
+    });
   }
 
   function esc(s){
@@ -1056,34 +1157,55 @@
   }
 
   /* ---------------- History ---------------- */
+  function syncSectionHtml(){
+    var cfg = loadSyncCfg();
+    var status = "Not configured";
+    if(cfg.repo && cfg.token){
+      status = cfg.lastSyncedAt ? ("Last synced "+new Date(cfg.lastSyncedAt).toLocaleString()) : "Configured — not yet synced";
+    }
+    return (
+      '<div class="card" style="margin-top:16px">'+
+        '<div class="field"><label class="lbl">GitHub sync (optional)</label>'+
+        '<div class="hint">GitHub is the source of truth when reachable — every save pushes here, and the app pulls the latest on open. Your phone keeps a local copy so logging still works offline.</div></div>'+
+        '<div class="field"><label class="lbl">Repo (owner/name)</label>'+
+        '<input type="text" id="sync-repo" placeholder="yourname/climbing-log-data" value="'+esc(cfg.repo||"")+'"></div>'+
+        '<div class="field"><label class="lbl">Personal access token</label>'+
+        '<input type="password" id="sync-token" placeholder="github_pat_…" value="'+esc(cfg.token||"")+'"></div>'+
+        '<div class="hint" id="sync-status">'+esc(status)+'</div>'+
+        '<button type="button" class="btn-primary" id="sync-save-btn">Save &amp; sync now</button>'+
+      '</div>'
+    );
+  }
+
   function renderHistory(){
     var el = document.getElementById("view-history");
     var sorted = sessions.slice().sort(function(a,b){ return a.date<b.date?1:-1; });
-    if(!sorted.length){
-      el.innerHTML = '<div class="empty">No sessions logged yet. Tap + to add your first.</div>';
-      return;
-    }
     var html = "";
-    for(var i=0;i<sorted.length;i++){
-      var s = sorted[i];
-      var meta = TYPES[s.type] || {color:"#999", label:s.type};
-      html +=
-        '<div class="h-item">'+
-          '<div class="h-top"><span class="type-chip"><span class="dot" style="background:'+meta.color+'"></span>'+esc(meta.label)+'</span><span class="h-date">'+fmtDate(s.date)+'</span></div>'+
-          '<div class="h-detail">'+typeDetailLine(s)+'</div>'+
-          '<div class="h-foot" style="justify-content:flex-end;gap:8px">'+
-              '<button class="del" data-edit="'+s.id+'">Edit</button>'+
-              '<button class="del" data-del="'+s.id+'">Delete</button>'+
-          '</div>'+
-          (s.notes?'<div class="h-notes">'+esc(s.notes)+'</div>':"")+
-        '</div>';
+    if(!sorted.length){
+      html += '<div class="empty">No sessions logged yet. Tap + to add your first.</div>';
+    } else {
+      for(var i=0;i<sorted.length;i++){
+        var s = sorted[i];
+        var meta = TYPES[s.type] || {color:"#999", label:s.type};
+        html +=
+          '<div class="h-item">'+
+            '<div class="h-top"><span class="type-chip"><span class="dot" style="background:'+meta.color+'"></span>'+esc(meta.label)+'</span><span class="h-date">'+fmtDate(s.date)+'</span></div>'+
+            '<div class="h-detail">'+typeDetailLine(s)+'</div>'+
+            '<div class="h-foot" style="justify-content:flex-end;gap:8px">'+
+                '<button class="del" data-edit="'+s.id+'">Edit</button>'+
+                '<button class="del" data-del="'+s.id+'">Delete</button>'+
+            '</div>'+
+            (s.notes?'<div class="h-notes">'+esc(s.notes)+'</div>':"")+
+          '</div>';
+      }
     }
     html +=
       '<div class="tools">'+
         '<button id="t-export">Export data (JSON)</button>'+
         '<button id="t-import">Import data</button>'+
       '</div>'+
-      '<input type="file" id="t-file" accept="application/json" style="display:none">';
+      '<input type="file" id="t-file" accept="application/json" style="display:none">'+
+      syncSectionHtml();
     el.innerHTML = html;
 
     var edits = el.querySelectorAll("button[data-edit]");
@@ -1104,6 +1226,15 @@
     document.getElementById("t-export").onclick = exportData;
     document.getElementById("t-import").onclick = function(){ document.getElementById("t-file").click(); };
     document.getElementById("t-file").onchange = importData;
+    document.getElementById("sync-save-btn").onclick = function(){
+      var repo = document.getElementById("sync-repo").value.trim();
+      var token = document.getElementById("sync-token").value.trim();
+      var prev = loadSyncCfg();
+      var repoChanged = prev.repo !== repo;
+      saveSyncCfg({ repo: repo, token: token, lastSha: repoChanged ? null : prev.lastSha, lastSyncedAt: repoChanged ? null : prev.lastSyncedAt });
+      toast("Sync settings saved");
+      pullFromGitHub({ onDone: function(changed){ renderHistory(); if(changed) refreshCurrentView(); } });
+    };
   }
 
   function exportData(){
@@ -1163,8 +1294,17 @@
     });
   }
 
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState==="visible" && syncConfigured()){
+      pullFromGitHub({ onDone: function(changed){ if(changed) refreshCurrentView(); } });
+    }
+  });
+
   loadData();
   renderCalendar();
+  if(syncConfigured()){
+    pullFromGitHub({ onDone: function(changed){ if(changed) refreshCurrentView(); } });
+  }
 })();
 </script>
 </body>
