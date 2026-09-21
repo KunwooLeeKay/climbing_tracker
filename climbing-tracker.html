@@ -590,7 +590,9 @@
 
   function typeDetailLine(s){
     if(s.type==="Hangboard"){
-      return s.weight+" kg"+
+      return (s.edge?s.edge+" \u00b7 ":"")+
+        (s.protocol==="Sub-Max Daily"?"Sub-Max Daily \u00b7 ":"")+
+        s.weight+" kg"+
         (s.sets!=null?" \u00b7 "+s.sets+" sets":"")+
         " \u00b7 "+(s.clean===true?"clean":(s.clean===false?"form broke":"\u2014"))+
         (s.rpe!=null?" \u00b7 RPE "+s.rpe:"");
@@ -776,7 +778,18 @@
     if(form.type==="Hangboard"){
       lh = lastOfType("Hangboard", function(s){ return s.weight!=null; });
       var adv = progressAdvice();
+      var protocol = form.protocol || "Max Hangs";
       specific =
+        '<div class="field"><label class="lbl">Protocol</label>'+
+        '<div class="seg" id="f-protocol">'+
+        '<button type="button" data-v="Max Hangs" class="'+(protocol==="Max Hangs"?"sel":"")+'">Max Hangs</button>'+
+        '<button type="button" data-v="Sub-Max Daily" class="'+(protocol==="Sub-Max Daily"?"sel":"")+'">Sub-Max Daily</button></div></div>'+
+        '<div class="field"><label class="lbl">Edge (optional)</label>'+
+        '<div class="seg" id="f-edge">'+
+        ["20mm","25mm","30mm"].map(function(e){
+          return '<button type="button" data-v="'+e+'" class="'+(form.edge===e?"sel":"")+'">'+e+'</button>';
+        }).join("")+
+        '</div></div>'+
         (adv?'<div class="advice '+(adv[0]==="go"?"go":"hold")+'">'+adv[1]+'</div>':"")+
         '<div class="field"><label class="lbl">Working weight (kg added \u2014 negative if assisted)</label>'+
         '<input type="number" step="0.5" id="f-weight" placeholder="e.g. 12 or -5" value="'+(form.weight!=null?esc(form.weight):"")+'">'+
@@ -886,6 +899,24 @@
       var cbtns = clean.querySelectorAll("button");
       for(var j=0;j<cbtns.length;j++){
         cbtns[j].onclick = (function(b){ return function(){ syncForm(root); form.clean=(b.dataset.v==="yes"); renderModal(); }; })(cbtns[j]);
+      }
+    }
+    var protoSeg = root.querySelector("#f-protocol");
+    if(protoSeg){
+      var pbtns = protoSeg.querySelectorAll("button");
+      for(var pp=0;pp<pbtns.length;pp++){
+        pbtns[pp].onclick = (function(b){ return function(){ syncForm(root); form.protocol=b.dataset.v; renderModal(); }; })(pbtns[pp]);
+      }
+    }
+    var edgeSeg = root.querySelector("#f-edge");
+    if(edgeSeg){
+      var ebtns = edgeSeg.querySelectorAll("button");
+      for(var ee=0;ee<ebtns.length;ee++){
+        ebtns[ee].onclick = (function(b){ return function(){
+          syncForm(root);
+          form.edge = (form.edge===b.dataset.v) ? null : b.dataset.v;
+          renderModal();
+        }; })(ebtns[ee]);
       }
     }
     var puStyleSeg = root.querySelector("#f-pu-style");
