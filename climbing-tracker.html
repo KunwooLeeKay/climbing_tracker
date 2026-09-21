@@ -601,8 +601,8 @@
       return (s.edge?s.edge+" \u00b7 ":"")+
         s.weight+" kg"+
         (s.sets!=null?" \u00b7 "+s.sets+" sets":"")+
-        " \u00b7 "+(s.clean===true?"clean":(s.clean===false?"form broke":"\u2014"))+
-        (s.rpe!=null?" \u00b7 RPE "+s.rpe:"");
+        (s.secPerRep!=null?" \u00b7 "+s.secPerRep+"s\/rep":"")+
+        " \u00b7 "+(s.clean===true?"clean":(s.clean===false?"form broke":"\u2014"));
     }
     if(s.type==="SubMax"){
       return (s.reps!=null?s.reps:"?")+" reps \u00d7 "+(s.secPerRep!=null?s.secPerRep:"?")+"s";
@@ -720,7 +720,6 @@
     function g(id){ var e=root.querySelector("#"+id); return e?e.value:undefined; }
     if(g("f-date")!==undefined) form.date = g("f-date");
     if(g("f-weight")!==undefined) form.weight = g("f-weight")===""?null:parseFloat(g("f-weight"));
-    if(g("f-rpe")!==undefined) form.rpe = g("f-rpe")===""?null:parseFloat(g("f-rpe"));
     if(g("f-sets")!==undefined) form.sets = g("f-sets")===""?null:parseInt(g("f-sets"),10);
     if(g("f-subreps")!==undefined) form.reps = g("f-subreps")===""?null:parseInt(g("f-subreps"),10);
     if(g("f-subsec")!==undefined) form.secPerRep = g("f-subsec")===""?null:parseInt(g("f-subsec"),10);
@@ -803,12 +802,12 @@
         '<div class="hint">'+(lh?"Last session: "+esc(lh.weight)+" kg.":"No previous hangboard session logged yet.")+'</div></div>'+
         '<div class="field"><label class="lbl">Working sets completed</label>'+
         '<input type="number" step="1" min="0" max="12" id="f-sets" placeholder="e.g. 6" value="'+(form.sets!=null?esc(form.sets):"")+'"></div>'+
+        '<div class="field"><label class="lbl">Seconds per rep</label>'+
+        '<input type="number" step="1" min="0" id="f-subsec" placeholder="e.g. 7" value="'+(form.secPerRep!=null?esc(form.secPerRep):"")+'"></div>'+
         '<div class="field"><label class="lbl">Were all working sets clean? (good form, never failed)</label>'+
         '<div class="seg" id="f-clean">'+
         '<button type="button" data-v="yes" class="'+(form.clean===true?"sel":"")+'">Yes, all clean</button>'+
-        '<button type="button" data-v="no" class="'+(form.clean===false?"sel":"")+'">No \u2014 form broke</button></div></div>'+
-        '<div class="field"><label class="lbl">Average RPE (1\u201310, optional)</label>'+
-        '<input type="number" step="0.5" min="1" max="10" id="f-rpe" placeholder="e.g. 8" value="'+(form.rpe!=null?esc(form.rpe):"")+'"></div>';
+        '<button type="button" data-v="no" class="'+(form.clean===false?"sel":"")+'">No \u2014 form broke</button></div></div>';
     } else if(form.type==="SubMax"){
       specific =
         '<div class="hint">Emil\u2019s Sub-Max Daily protocol \u2014 feet on the ground, submaximal, no failure. Defaults to 6 reps of 10s; lower the reps if you cut it short.</div>'+
