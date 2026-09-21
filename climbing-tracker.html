@@ -330,10 +330,11 @@
     Commercial: { label:"Commercial Gym", color:"#2f9e6e" },
     Kilter:     { label:"Kilter Board",   color:"#8b5cf6" },
     Hangboard:  { label:"Hangboard",      color:"#185FA5" },
+    SubMax:     { label:"Sub-Max Daily",  color:"#0891b2" },
     Weight:     { label:"Weight Session", color:"#c97a3c" },
     Route:      { label:"Route",          color:"#d0479a" }
   };
-  var TYPE_ORDER = ["Commercial","Kilter","Hangboard","Weight","Route"];
+  var TYPE_ORDER = ["Commercial","Kilter","Hangboard","SubMax","Weight","Route"];
 
   var BANDS = ["V2–V4","V4–V6","V6–V8"];
 
@@ -357,6 +358,13 @@
     sessions.forEach(function(s){
       if(s.type==="Board"){ s.type="Kilter"; changed = true; }
       if(s.type==="Volume"){ s.type="Commercial"; changed = true; }
+      if(s.type==="Hangboard" && s.protocol==="Sub-Max Daily"){
+        s.type = "SubMax";
+        s.reps = s.reps!=null ? s.reps : 6;
+        s.secPerRep = 10;
+        delete s.protocol; delete s.weight; delete s.sets; delete s.clean; delete s.rpe; delete s.edge;
+        changed = true;
+      }
     });
     if(changed) saveData();
   }
@@ -591,11 +599,13 @@
   function typeDetailLine(s){
     if(s.type==="Hangboard"){
       return (s.edge?s.edge+" \u00b7 ":"")+
-        (s.protocol==="Sub-Max Daily"?"Sub-Max Daily \u00b7 ":"")+
         s.weight+" kg"+
         (s.sets!=null?" \u00b7 "+s.sets+" sets":"")+
         " \u00b7 "+(s.clean===true?"clean":(s.clean===false?"form broke":"\u2014"))+
         (s.rpe!=null?" \u00b7 RPE "+s.rpe:"");
+    }
+    if(s.type==="SubMax"){
+      return (s.reps!=null?s.reps:"?")+" reps \u00d7 "+(s.secPerRep!=null?s.secPerRep:"?")+"s";
     }
     if(s.type==="Kilter"){
       return (s.angle!=null?s.angle+"\u00b0 \u00b7 ":"")+climbsSummary(s.climbs);
@@ -712,6 +722,8 @@
     if(g("f-weight")!==undefined) form.weight = g("f-weight")===""?null:parseFloat(g("f-weight"));
     if(g("f-rpe")!==undefined) form.rpe = g("f-rpe")===""?null:parseFloat(g("f-rpe"));
     if(g("f-sets")!==undefined) form.sets = g("f-sets")===""?null:parseInt(g("f-sets"),10);
+    if(g("f-subreps")!==undefined) form.reps = g("f-subreps")===""?null:parseInt(g("f-subreps"),10);
+    if(g("f-subsec")!==undefined) form.secPerRep = g("f-subsec")===""?null:parseInt(g("f-subsec"),10);
     if(g("f-angle")!==undefined) form.angle = g("f-angle")===""?null:parseFloat(g("f-angle"));
     if(g("f-gym")!==undefined) form.gym = g("f-gym");
     if(g("f-location")!==undefined) form.location = g("f-location");
@@ -778,12 +790,7 @@
     if(form.type==="Hangboard"){
       lh = lastOfType("Hangboard", function(s){ return s.weight!=null; });
       var adv = progressAdvice();
-      var protocol = form.protocol || "Max Hangs";
       specific =
-        '<div class="field"><label class="lbl">Protocol</label>'+
-        '<div class="seg" id="f-protocol">'+
-        '<button type="button" data-v="Max Hangs" class="'+(protocol==="Max Hangs"?"sel":"")+'">Max Hangs</button>'+
-        '<button type="button" data-v="Sub-Max Daily" class="'+(protocol==="Sub-Max Daily"?"sel":"")+'">Sub-Max Daily</button></div></div>'+
         '<div class="field"><label class="lbl">Edge (optional)</label>'+
         '<div class="seg" id="f-edge">'+
         ["20mm","25mm","30mm"].map(function(e){
@@ -802,6 +809,13 @@
         '<button type="button" data-v="no" class="'+(form.clean===false?"sel":"")+'">No \u2014 form broke</button></div></div>'+
         '<div class="field"><label class="lbl">Average RPE (1\u201310, optional)</label>'+
         '<input type="number" step="0.5" min="1" max="10" id="f-rpe" placeholder="e.g. 8" value="'+(form.rpe!=null?esc(form.rpe):"")+'"></div>';
+    } else if(form.type==="SubMax"){
+      specific =
+        '<div class="hint">Emil\u2019s Sub-Max Daily protocol \u2014 feet on the ground, submaximal, no failure. Defaults to 6 reps of 10s; lower the reps if you cut it short.</div>'+
+        '<div class="field"><label class="lbl">Reps completed</label>'+
+        '<input type="number" step="1" min="0" max="6" id="f-subreps" value="'+(form.reps!=null?esc(form.reps):"6")+'"></div>'+
+        '<div class="field"><label class="lbl">Seconds per rep</label>'+
+        '<input type="number" step="1" min="0" id="f-subsec" value="'+(form.secPerRep!=null?esc(form.secPerRep):"10")+'"></div>';
     } else if(form.type==="Kilter"){
       specific =
         '<div class="field"><label class="lbl">Board angle (\u00b0, optional)</label>'+
@@ -899,13 +913,6 @@
       var cbtns = clean.querySelectorAll("button");
       for(var j=0;j<cbtns.length;j++){
         cbtns[j].onclick = (function(b){ return function(){ syncForm(root); form.clean=(b.dataset.v==="yes"); renderModal(); }; })(cbtns[j]);
-      }
-    }
-    var protoSeg = root.querySelector("#f-protocol");
-    if(protoSeg){
-      var pbtns = protoSeg.querySelectorAll("button");
-      for(var pp=0;pp<pbtns.length;pp++){
-        pbtns[pp].onclick = (function(b){ return function(){ syncForm(root); form.protocol=b.dataset.v; renderModal(); }; })(pbtns[pp]);
       }
     }
     var edgeSeg = root.querySelector("#f-edge");
