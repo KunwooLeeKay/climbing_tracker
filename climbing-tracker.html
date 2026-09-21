@@ -133,13 +133,6 @@
   }
   .btn-primary:active { transform: scale(0.98); }
 
-  .advice {
-    border-radius: var(--r-sm); padding: 10px 13px; font-size: 12.5px; margin-bottom: 15px;
-    line-height: 1.45;
-  }
-  .advice.go { background: var(--ok-bg); color: var(--ok-ink); }
-  .advice.hold { background: var(--warn-bg); color: var(--warn-ink); }
-
   .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px; box-shadow: var(--shadow-sm); }
   .stat .s-lbl { font-size: 11.5px; color: var(--muted); }
@@ -696,16 +689,6 @@
     document.getElementById("modal-root").innerHTML = "";
   }
 
-  function progressAdvice(){
-    var lh = lastOfType("Hangboard", function(s){ return s.weight!=null; });
-    if(!lh) return null;
-    if(lh.clean===false)
-      return ["hold","Last session\u2019s sets weren\u2019t all clean. Repeat "+lh.weight+" kg \u2014 don\u2019t add weight yet."];
-    if(lh.clean===true)
-      return ["go","Last hangboard session ("+lh.weight+" kg) was clean. You can add 1\u20132.5 kg."];
-    return ["hold","Repeat "+lh.weight+" kg unless the last session felt genuinely easy and clean."];
-  }
-
   function readGroup(root, prefix){
     function g(id){ var e=root.querySelector("#"+id); return e?e.value:undefined; }
     var obj = {};
@@ -788,7 +771,6 @@
     var lh, specific;
     if(form.type==="Hangboard"){
       lh = lastOfType("Hangboard", function(s){ return s.weight!=null; });
-      var adv = progressAdvice();
       specific =
         '<div class="field"><label class="lbl">Edge (optional)</label>'+
         '<div class="seg" id="f-edge">'+
@@ -796,7 +778,6 @@
           return '<button type="button" data-v="'+e+'" class="'+(form.edge===e?"sel":"")+'">'+e+'</button>';
         }).join("")+
         '</div></div>'+
-        (adv?'<div class="advice '+(adv[0]==="go"?"go":"hold")+'">'+adv[1]+'</div>':"")+
         '<div class="field"><label class="lbl">Working weight (kg added \u2014 negative if assisted)</label>'+
         '<input type="number" step="0.5" id="f-weight" placeholder="e.g. 12 or -5" value="'+(form.weight!=null?esc(form.weight):"")+'">'+
         '<div class="hint">'+(lh?"Last session: "+esc(lh.weight)+" kg.":"No previous hangboard session logged yet.")+'</div></div>'+
