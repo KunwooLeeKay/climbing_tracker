@@ -1,4 +1,4 @@
-var CACHE = "climbing-log-v1";
+var CACHE = "climbing-log-v3";
 var ASSETS = [
   "./climbing-tracker.html",
   "./manifest.json",

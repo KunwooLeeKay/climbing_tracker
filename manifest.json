@@ -1,13 +1,13 @@
 {
   "name": "Climbing Log",
   "short_name": "Climbing Log",
-  "description": "Calendar-based climbing training log",
+  "description": "Climbing training log",
   "start_url": "./climbing-tracker.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f4f5f3",
-  "theme_color": "#2d4356",
+  "background_color": "#F7F6F3",
+  "theme_color": "#141413",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
