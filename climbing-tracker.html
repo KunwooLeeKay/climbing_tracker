@@ -70,7 +70,10 @@
       transition-duration: 0.001ms !important;
     }
   }
-  .wrap { max-width: 620px; margin: 0 auto; padding: 28px 18px 68px; }
+  .wrap {
+    max-width: 620px; margin: 0 auto;
+    padding: calc(28px + env(safe-area-inset-top)) 18px calc(68px + env(safe-area-inset-bottom));
+  }
 
   header { display: flex; align-items: center; gap: 13px; margin-bottom: 26px; }
   .header-text { flex: 1; min-width: 0; }
@@ -264,7 +267,7 @@
   .tools button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 
   .toast {
-    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(80px);
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(80px);
     background: var(--cta); color: var(--cta-ink); padding: 10px 20px; border-radius: var(--r-sm);
     font-size: 13px; opacity: 0; transition: transform .25s var(--ease), opacity .25s var(--ease);
     pointer-events: none; box-shadow: var(--shadow-sm);
@@ -327,7 +330,7 @@
 
   /* ---- FAB ---- */
   .fab {
-    position: fixed; right: 20px; bottom: 26px; width: 52px; height: 52px; border-radius: 50%;
+    position: fixed; right: 20px; bottom: calc(26px + env(safe-area-inset-bottom)); width: 52px; height: 52px; border-radius: 50%;
     background: var(--cta); color: var(--cta-ink); border: none; cursor: pointer;
     box-shadow: var(--shadow-sm);
     display: flex; align-items: center; justify-content: center; line-height: 1; z-index: 40;
