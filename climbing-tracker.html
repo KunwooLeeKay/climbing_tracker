@@ -138,7 +138,7 @@
 
   /* ---- Grade pyramid ---- */
   .pyr { display: grid; gap: 4px; }
-  .pyr-row { display: grid; grid-template-columns: 42px 1fr 28px; align-items: center; gap: 9px; }
+  .pyr-row { display: grid; grid-template-columns: 54px 1fr 28px; align-items: center; gap: 9px; }
   .pyr-g { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; }
   .pyr-bar { height: 16px; border-radius: 2px; min-width: 2px; }
   .pyr-n { font-family: var(--mono); font-size: 11px; color: var(--muted); }
@@ -1207,6 +1207,12 @@
     el.innerHTML = html;
   }
 
+  /* Time-under-tension per session: sets \u00d7 seconds/rep. Doesn't need a max-effort
+     test \u2014 it's just the two numbers already logged every session, multiplied. */
+  function hangVolume(s){
+    return (s.sets!=null && s.secPerRep!=null) ? s.sets * s.secPerRep : null;
+  }
+
   function renderHangProgress(el, tick, grid){
     var hangs = sessions.filter(function(s){ return s.type==="Hangboard" && s.weight!=null; });
     hangs.sort(function(a,b){ return a.date<b.date?-1:1; });
@@ -1214,16 +1220,29 @@
     var fh = hangs.length?hangs[0]:null;
     var gain = (lh&&fh)?(lh.weight-fh.weight):0;
 
+    var vols = sessions.filter(function(s){ return s.type==="Hangboard" && hangVolume(s)!=null; });
+    vols.sort(function(a,b){ return a.date<b.date?-1:1; });
+    var lv = vols.length?vols[vols.length-1]:null;
+
     var html =
       '<div class="stats">'+
         '<div class="stat"><div class="s-lbl">Current weight</div><div class="s-val">'+(lh?lh.weight+" kg":"\u2014")+'</div></div>'+
         '<div class="stat"><div class="s-lbl">Gain since start</div><div class="s-val">'+(hangs.length>1?((gain>=0?"+":"")+r1(gain)+" kg"):"\u2014")+'</div></div>'+
+        '<div class="stat"><div class="s-lbl">Last volume</div><div class="s-val">'+(lv?hangVolume(lv)+"s":"\u2014")+'</div></div>'+
+        '<div class="stat"><div class="s-lbl">Sessions logged</div><div class="s-val">'+hangs.length+'</div></div>'+
       '</div>';
     if(hangs.length>=2){
       html += '<div class="chart-card"><div class="chart-title">Working weight over time</div>'+
-        '<div style="position:relative;height:240px"><canvas id="hangChart" role="img" aria-label="Line chart of hangboard working weight over time">Weights: '+hangs.map(function(h){return h.weight+"kg";}).join(", ")+'</canvas></div></div>';
+        '<div style="position:relative;height:220px"><canvas id="hangChart" role="img" aria-label="Line chart of hangboard working weight over time">Weights: '+hangs.map(function(h){return h.weight+"kg";}).join(", ")+'</canvas></div></div>';
     } else {
-      html += '<div class="empty">Log at least 2 hangboard sessions to see your progression chart.</div>';
+      html += '<div class="empty">Log at least 2 hangboard sessions to see your weight progression chart.</div>';
+    }
+    if(vols.length>=2){
+      html += '<div class="chart-card"><div class="chart-title">Volume over time</div>'+
+        '<div class="chart-sub">Sets \u00d7 seconds per rep \u2014 total time under tension</div>'+
+        '<div style="position:relative;height:200px"><canvas id="hangVolChart" role="img" aria-label="Bar chart of hangboard volume (sets times seconds per rep) over time">Volume: '+vols.map(function(v){return hangVolume(v)+"s";}).join(", ")+'</canvas></div></div>';
+    } else {
+      html += '<div class="empty">Log sets and seconds/rep on at least 2 sessions to see your volume chart.</div>';
     }
     el.innerHTML = html;
     if(hangs.length>=2 && window.Chart){
@@ -1235,6 +1254,15 @@
             pointRadius:4, pointHoverRadius:6, pointBackgroundColor:"#1F6C9F", pointBorderColor:"#1F6C9F" }] },
         options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} },
           scales:{ y:{ ticks:{color:tick}, grid:{color:grid} }, x:{ ticks:{color:tick,maxRotation:45,autoSkip:true}, grid:{display:false} } } }
+      });
+    }
+    if(vols.length>=2 && window.Chart){
+      charts.hangVol = new Chart(document.getElementById("hangVolChart"),{
+        type:"bar",
+        data:{ labels: vols.map(function(v){ return fmtDate(v.date); }),
+          datasets:[{ label:"Volume (s)", data: vols.map(function(v){ return hangVolume(v); }), backgroundColor:"#1F6C9F" }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} },
+          scales:{ y:{ ticks:{color:tick}, grid:{color:grid}, beginAtZero:true }, x:{ ticks:{color:tick,maxRotation:45,autoSkip:true}, grid:{display:false} } } }
       });
     }
   }
@@ -1319,6 +1347,27 @@
     }
   }
 
+  /* Fixed-band breakdown (not sorted by count) — always shows all three bands
+     in order so "how much am I doing at V4-6 / V6-8" is a direct read, not
+     something you have to eyeball out of a stacked bar chart. */
+  function bandBreakdownHtml(rows){
+    var totals = {};
+    BANDS.forEach(function(b){ totals[b] = 0; });
+    rows.forEach(function(r){ BANDS.forEach(function(b){ totals[b] += (r.bc[b]||0); }); });
+    var max = Math.max.apply(null, BANDS.map(function(b){ return totals[b]; }).concat([1]));
+    var bandColors = ["#A9C9A5","#6E9A6A","#346538"];
+    var rowsHtml = BANDS.map(function(b,i){
+      var pct = Math.max(2, Math.round(totals[b]/max*100));
+      return '<div class="pyr-row">'+
+        '<span class="pyr-g">'+esc(b)+'</span>'+
+        '<span class="pyr-bar" style="width:'+pct+'%;background:'+bandColors[i]+'"></span>'+
+        '<span class="pyr-n">'+totals[b]+'</span>'+
+      '</div>';
+    }).join("");
+    return '<div class="chart-card"><div class="chart-title">Climbs by grade band</div>'+
+      '<div class="chart-sub">Total logged, all time</div><div class="pyr">'+rowsHtml+'</div></div>';
+  }
+
   function renderCommercialProgress(el, tick, grid){
     var cs = sessions.filter(function(s){ return s.type==="Commercial" && s.bandCounts; });
     cs.sort(function(a,b){ return a.date<b.date?-1:1; });
@@ -1333,7 +1382,8 @@
       '<div class="stats">'+
         '<div class="stat"><div class="s-lbl">Total climbs logged</div><div class="s-val">'+totalAll+'</div></div>'+
         '<div class="stat"><div class="s-lbl">Sessions logged</div><div class="s-val">'+rows.length+'</div></div>'+
-      '</div>';
+      '</div>'+
+      (rows.length?bandBreakdownHtml(rows):"");
     if(rows.length>=2){
       html += '<div class="chart-card"><div class="chart-title">Climbs per session by grade band</div>'+
         '<div style="position:relative;height:220px"><canvas id="commChart"></canvas></div></div>';
@@ -1359,21 +1409,43 @@
     }
   }
 
+  /* Volume (sets \u00d7 reps) instead of a max-effort test: it's read straight off
+     what you already log, whether or not you're testing anything near a 1RM. */
+  function pullupVolume(s){
+    var p = s.pullups;
+    return (p && p.sets!=null && p.reps!=null) ? p.sets * p.reps : null;
+  }
+
   function renderWeightProgress(el, tick, grid){
     var ws = sessions.filter(function(s){ return s.type==="Weight" && s.pullups && s.pullups.weight!=null; });
     ws.sort(function(a,b){ return a.date<b.date?-1:1; });
     var lw = ws.length?ws[ws.length-1]:null;
 
+    var vs = sessions.filter(function(s){ return s.type==="Weight" && pullupVolume(s)!=null; });
+    vs.sort(function(a,b){ return a.date<b.date?-1:1; });
+    var lv = vs.length?vs[vs.length-1]:null;
+    var totalVol = vs.reduce(function(a,s){ return a+pullupVolume(s); },0);
+
     var html =
       '<div class="stats">'+
         '<div class="stat"><div class="s-lbl">Current pull-up weight</div><div class="s-val">'+(lw?lw.pullups.weight+" kg":"\u2014")+'</div></div>'+
+        '<div class="stat"><div class="s-lbl">Last volume</div><div class="s-val">'+(lv?pullupVolume(lv)+" reps":"\u2014")+'</div></div>'+
+        '<div class="stat"><div class="s-lbl">Total volume</div><div class="s-val">'+(vs.length?totalVol+" reps":"\u2014")+'</div></div>'+
         '<div class="stat"><div class="s-lbl">Sessions logged</div><div class="s-val">'+sessions.filter(function(s){return s.type==="Weight";}).length+'</div></div>'+
       '</div>';
     if(ws.length>=2){
       html += '<div class="chart-card"><div class="chart-title">Pull-up added weight over time</div>'+
-        '<div style="position:relative;height:220px"><canvas id="pullChart"></canvas></div></div>';
+        '<div class="chart-sub">Only meaningful if you\u2019re testing near-max \u2014 most sessions won\u2019t move this</div>'+
+        '<div style="position:relative;height:200px"><canvas id="pullChart"></canvas></div></div>';
     } else {
-      html += '<div class="empty">Log at least 2 weighted pull-up sessions to see your progression chart.</div>';
+      html += '<div class="empty">Log at least 2 weighted pull-up sessions to see your weight chart.</div>';
+    }
+    if(vs.length>=2){
+      html += '<div class="chart-card"><div class="chart-title">Volume over time</div>'+
+        '<div class="chart-sub">Sets \u00d7 reps \u2014 tracks work done without needing a max test</div>'+
+        '<div style="position:relative;height:200px"><canvas id="pullVolChart"></canvas></div></div>';
+    } else {
+      html += '<div class="empty">Log sets and reps on at least 2 sessions to see your volume chart.</div>';
     }
     el.innerHTML = html;
     if(ws.length>=2 && window.Chart){
@@ -1385,6 +1457,15 @@
             pointRadius:4, pointHoverRadius:6, pointBackgroundColor:"#956400", pointBorderColor:"#956400" }] },
         options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} },
           scales:{ y:{ ticks:{color:tick}, grid:{color:grid} }, x:{ ticks:{color:tick,maxRotation:45,autoSkip:true}, grid:{display:false} } } }
+      });
+    }
+    if(vs.length>=2 && window.Chart){
+      charts.pullVol = new Chart(document.getElementById("pullVolChart"),{
+        type:"bar",
+        data:{ labels: vs.map(function(w){return fmtDate(w.date);}),
+          datasets:[{ label:"Volume (reps)", data: vs.map(function(w){return pullupVolume(w);}), backgroundColor:"#956400" }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} },
+          scales:{ y:{ ticks:{color:tick}, grid:{color:grid}, beginAtZero:true }, x:{ ticks:{color:tick,maxRotation:45,autoSkip:true}, grid:{display:false} } } }
       });
     }
   }
